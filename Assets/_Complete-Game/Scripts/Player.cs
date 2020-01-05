@@ -1,0 +1,254 @@
+﻿
+using UnityEngine;
+using System.Collections;
+using UnityEngine.SceneManagement;        //Allows us to use SceneManager
+using UnityEngine.UI;
+using System.Timers;
+
+//Player inherits from MovingObject, our base class for objects that can move, Enemy also inherits from this.
+public class Player : MovingObject
+{
+    public float restartLevelDelay = 1f;        //Delay time in seconds to restart level.
+    public int timePerReindeer = 5;                //Number of us to add to player time when picking up a reindeer.
+    public int wallDamage = 1;                    //How much damage a player does to a wall when chopping it.
+    public Text timeText;
+    public AudioClip moveSound1;
+    public AudioClip moveSound2;
+    public AudioClip eatSound1;
+    public AudioClip eatSound2;
+    public AudioClip drinkSound1;
+    public AudioClip drinkSound2;
+    public AudioClip gameOverSound;
+
+    private Animator animator;                    //Used to store a reference to the Player's animator component.
+    private float time;                            //Used to store player time.
+    private int gifts; 
+    private Vector2 touchOrigin = -Vector2.one;
+
+    private float waitingForSecond;
+      
+
+
+    //Start overrides the Start function of MovingObject
+    protected override void Start()
+    {
+        //Get a component reference to the Player's animator component
+        animator = GetComponent<Animator>();
+
+        //Get the current time stored in GameManager.instance between levels.
+        time = GameManager.instance.playerTime;
+        gifts = GameManager.instance.playerGifts;
+        int minutes = (int) time / 60;
+        int seconds = ((int) time - ((int) time / 60) * 60);
+        timeText.text = "Time: " + minutes + ":" + seconds;
+
+        waitingForSecond = 0;
+        
+        //Call the Start function of the MovingObject base class.
+        base.Start();
+    }
+
+
+    //This function is called when the behaviour becomes disabled or inactive.
+    private void OnDisable()
+    {
+        //When Player object is disabled, store the current local time in the GameManager so it can be re-loaded in next level.
+        GameManager.instance.playerTime = time;
+        GameManager.instance.playerGifts = gifts;
+    }
+
+
+    private void Update()
+    {
+        waitingForSecond += Time.deltaTime;
+        if (waitingForSecond >= 1)
+        {
+            //Every time the timer ticks, subtract from time.
+            time--;
+            int minutes = (int)time / 60;
+            int seconds = (int)time - ((int)time / 60) * 60;
+            if (seconds < 10)
+                timeText.text = "Time: " + minutes + ":0" + seconds;
+            else
+                timeText.text = "Time: " + minutes + ":" + seconds;
+
+            //Since the player has moved and lost t points, check if the game has ended.
+            CheckIfGameOver();
+            waitingForSecond = 0;
+        }
+
+
+        //If it's not the player's turn, exit the function.
+        if (!GameManager.instance.playersTurn) return;
+
+        int horizontal = 0;      //Used to store the horizontal move direction.
+        int vertical = 0;        //Used to store the vertical move direction.
+
+#if UNITY_EDITOR || UNITY_STANDALONE || UNITY_WEBPLAYER
+        //Get input from the input manager, round it to an integer and store in horizontal to set x axis move direction
+        horizontal = (int)(Input.GetAxisRaw("Horizontal"));
+
+        //Get input from the input manager, round it to an integer and store in vertical to set y axis move direction
+        vertical = (int)(Input.GetAxisRaw("Vertical"));
+
+        //Check if moving horizontally, if so set vertical to zero.
+        if (horizontal != 0)
+        {
+            vertical = 0;
+        }
+#else
+
+        if (Input.touchCount > 0)
+        {
+            Touch myTouch = Input.touches[0];
+
+            if (myTouch.phase == TouchPhase.Began)
+            {
+                touchOrigin = myTouch.position;
+            }
+
+            else if (myTouch.phase == TouchPhase.Ended && touchOrigin.x >= 0)
+            {
+                Vector2 touchEnd = myTouch.position;
+                float x = touchEnd.x - touchOrigin.x;
+                float y = touchEnd.y - touchOrigin.y;
+                touchOrigin.x = -1;
+                if (Mathf.Abs(x) > Mathf.Abs(y))
+                    horizontal = x > 0 ? 1 : -1;
+                else
+                    vertical = y > 0 ? 1 : -1;
+            }
+        }
+
+#endif
+
+        //Check if we have a non-zero value for horizontal or vertical
+        if (horizontal != 0 || vertical != 0)
+        {
+            //Call AttemptMove passing in the generic parameter Wall, since that is what Player may interact with if they encounter one (by attacking it)
+            //Pass in horizontal and vertical as parameters to specify the direction to move Player in.
+            AttemptMove<Wall>(horizontal, vertical);
+        }
+    }
+    
+
+    //AttemptMove overrides the AttemptMove function in the base class MovingObject
+    //AttemptMove takes a generic parameter T which for Player will be of the type Wall, it also takes integers for x and y direction to move in.
+    protected override void AttemptMove<T>(int xDir, int yDir)
+    {
+        
+
+        //Call the AttemptMove method of the base class, passing in the component T (in this case Wall) and x and y direction to move.
+        base.AttemptMove<T>(xDir, yDir);
+
+        //Hit allows us to reference the result of the Linecast done in Move.
+        RaycastHit2D hit;
+        //If Move returns true, meaning Player was able to move into an empty space.
+        if (Move(xDir, yDir, out hit))
+        {
+            //Call RandomizeSfx of SoundManager to play the move sound, passing in two audio clips to choose from.
+            SoundManager.instance.RandomizeSfx(moveSound1, moveSound2);
+        }
+
+        
+
+        //Set the playersTurn boolean of GameManager to false now that players turn is over.
+        GameManager.instance.playersTurn = false;
+    }
+
+
+    //OnCantMove overrides the abstract function OnCantMove in MovingObject.
+    //It takes a generic parameter T which in the case of Player is a Wall which the player can attack and destroy.
+    protected override void OnCantMove<T>(T component)
+    {
+        //Set hitWall to equal the component passed in as a parameter.
+        Wall hitWall = component as Wall;
+
+        //Call the DamageWall function of the Wall we are hitting.
+        hitWall.DamageWall(wallDamage);
+    }
+
+
+    //OnTriggerEnter2D is sent when another object enters a trigger collider attached to this object (2D physics only).
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        //Check if the tag of the trigger collided with is Exit.
+        if (other.tag == "Exit")
+        {
+            if (gifts >= 1)
+            {
+                //Invoke the Restart function to start the next level with a delay of restartLevelDelay (default 1 second).
+                Invoke("Restart", restartLevelDelay);
+
+                //Disable the player object since level is over.
+                enabled = false;
+            }
+        }
+        else if (other.tag == "Tree")
+        {
+            GameManager.instance.LeaveGift();
+            gifts--;
+
+            //Invoke the Restart function to start the next level with a delay of restartLevelDelay (default 1 second).
+            Invoke("Restart", restartLevelDelay);
+
+            //Disable the player object since level is over.
+            enabled = false;
+
+        }
+
+        //Check if the tag of the trigger collided with is Food.
+        else if (other.tag == "Food")
+        {
+            
+            gifts ++;
+            SoundManager.instance.RandomizeSfx(eatSound1, eatSound2);
+            //Disable the food object the player collided with.
+            other.gameObject.SetActive(false);
+        }
+
+        //Check if the tag of the trigger collided with is Soda.
+        else if (other.tag == "Soda")
+        {
+            //Add timePerReindeer to players time
+            time += timePerReindeer;
+            timeText.text = "+" + timePerReindeer + " s";
+            SoundManager.instance.RandomizeSfx(drinkSound1, drinkSound2);
+            //Disable the soda object the player collided with.
+            other.gameObject.SetActive(false);
+        }
+    }
+
+
+    //Restart reloads the scene when called.
+    private void Restart()
+    {
+        //Load the last scene loaded, in this case Main, the only scene in the game.
+        SceneManager.LoadScene(0);
+    }
+
+
+    //LoseFood is called when an enemy attacks the player.
+    //It takes a parameter loss which specifies how many points to lose.
+    public void LoseFood(int loss)
+    {
+        
+        //Subtract lost food points from the players total.
+        time -= loss;
+        timeText.text = "-" + loss + " s";
+        //Check to see if game has ended.
+        CheckIfGameOver();
+    }
+    //CheckIfGameOver checks if the player is out of time and if so, ends the game.
+    private void CheckIfGameOver()
+    {
+        //Check if food point total is less than or equal to zero.
+        if (time <= 0)
+        {
+            SoundManager.instance.PlaySingle(gameOverSound);
+            SoundManager.instance.musicSource.Stop();
+            //Call the GameOver function of GameManager.
+            GameManager.instance.GameOver();
+        }
+    }
+}

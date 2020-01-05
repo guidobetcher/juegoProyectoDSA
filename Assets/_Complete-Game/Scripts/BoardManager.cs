@@ -22,13 +22,19 @@ public class BoardManager : MonoBehaviour
     public int columns = 8;
     public int rows = 8;
     public Count wallCount = new Count(5, 9);
+    public Count interiorWallCount = new Count(5, 9);
     public Count foodCount = new Count(1, 5);
-    public GameObject exit;
+    public GameObject[] exitTiles;
+    public GameObject tree;
+    public GameObject gift;
     public GameObject[] floorTiles;
+    public GameObject[] interiorFloorTiles;
     public GameObject[] wallTiles;
+    public GameObject[] interiorWallTiles;
     public GameObject[] foodTiles;
     public GameObject[] enemyTiles;
     public GameObject[] outerWallTiles;
+    public GameObject[] interiorOuterWallTiles;
 
     private Transform boardHolder;
     private List<Vector3> gridPositions = new List<Vector3>();
@@ -65,6 +71,60 @@ public class BoardManager : MonoBehaviour
             }
         }
     }
+    void InteriorBoardSetup()
+    {
+        boardHolder = new GameObject("Board").transform;
+
+        for (int x = -1; x < columns + 1; x++)
+        {
+            for (int y = -1; y < rows + 1; y++)
+            {
+                GameObject toInstantiate = interiorFloorTiles[Random.Range(0, interiorFloorTiles.Length)];
+                if (x == -1 && y == -1)
+                    toInstantiate = interiorOuterWallTiles[0];
+                else if (x == columns && y == -1)
+                    toInstantiate = interiorOuterWallTiles[2];
+                else if (x == -1)
+                    toInstantiate = interiorOuterWallTiles[3];
+                else if (x == columns)
+                    toInstantiate = interiorOuterWallTiles[4];
+                else if (y == -1)
+                    toInstantiate = interiorOuterWallTiles[1];
+                else if (y == rows)
+                    toInstantiate = interiorOuterWallTiles[Random.Range(5, interiorOuterWallTiles.Length)];
+                else if (x < 2 || x > 5 || y < 2 || y > 4)
+                    toInstantiate = interiorFloorTiles[Random.Range(12, interiorFloorTiles.Length)];
+                else if (x == 2 && y == 2)
+                    toInstantiate = interiorFloorTiles[0];
+                else if (x == 2 && y == 3)
+                    toInstantiate = interiorFloorTiles[1];
+                else if (x == 2 && y == 4)
+                    toInstantiate = interiorFloorTiles[2];
+                else if (x == 3 && y == 2)
+                    toInstantiate = interiorFloorTiles[3];
+                else if (x == 3 && y == 3)
+                    toInstantiate = interiorFloorTiles[4];
+                else if (x == 3 && y == 4)
+                    toInstantiate = interiorFloorTiles[5];
+                else if (x == 4 && y == 2)
+                    toInstantiate = interiorFloorTiles[6];
+                else if (x == 4 && y == 3)
+                    toInstantiate = interiorFloorTiles[7];
+                else if (x == 4 && y == 4)
+                    toInstantiate = interiorFloorTiles[8];
+                else if (x == 5 && y == 2)
+                    toInstantiate = interiorFloorTiles[9];
+                else if (x == 5 && y == 3)
+                    toInstantiate = interiorFloorTiles[10];
+                else if (x == 5 && y == 4)
+                    toInstantiate = interiorFloorTiles[11];
+                
+                GameObject instance = Instantiate(toInstantiate, new Vector3(x, y, 0f), Quaternion.identity) as GameObject;
+
+                instance.transform.SetParent(boardHolder);
+            }
+        }
+    }
 
     Vector3 RandomPosition()
     {
@@ -72,6 +132,10 @@ public class BoardManager : MonoBehaviour
         Vector3 randomPosition = gridPositions[randomIndex];
         gridPositions.RemoveAt(randomIndex);
         return randomPosition;
+    }
+    public void LeaveGift()
+    {
+        Instantiate(gift, new Vector3(columns - 1, rows - 2, 0F), Quaternion.identity);
     }
 
     void LayoutObjectAtRandom(GameObject[] tileArray, int minimum, int maximum)
@@ -95,6 +159,18 @@ public class BoardManager : MonoBehaviour
         LayoutObjectAtRandom (foodTiles, foodCount.minimum, foodCount.maximum);
         int enemyCount = (int)Mathf.Log(level, 2f);
         LayoutObjectAtRandom(enemyTiles, enemyCount, enemyCount);
-        Instantiate(exit, new Vector3(columns - 1, rows - 1, 0F), Quaternion.identity);
+        GameObject toInstantiate = exitTiles[Random.Range(0, exitTiles.Length)];
+        Vector3 randomPosition = RandomPosition();
+        Instantiate(foodTiles[0], randomPosition, Quaternion.identity);
+        Instantiate(toInstantiate, new Vector3(columns - 1, rows - 1, 0F), Quaternion.identity);
+    }
+    public void SetupInteriorScene(int level)
+    {
+        InteriorBoardSetup();
+        InitialiseList();
+        LayoutObjectAtRandom(interiorWallTiles, interiorWallCount.minimum, interiorWallCount.maximum);
+        int enemyCount = (int)Mathf.Log(level, 2f);
+        LayoutObjectAtRandom(enemyTiles, enemyCount, enemyCount);
+        Instantiate(tree, new Vector3(columns - 1, rows - 1, 0F), Quaternion.identity);
     }
 }
